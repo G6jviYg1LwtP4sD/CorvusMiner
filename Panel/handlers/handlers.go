@@ -7,9 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -55,19 +58,22 @@ func formatUptimeFunc(minutes int) string {
 type Handler struct {
 	db       *database.DB
 	sessions *session.Manager
+	baseDir  string
 }
 
-// NewHandler creates a new handler with database
-func NewHandler(db *database.DB) *Handler {
+// NewHandler creates a new handler with database and base directory
+func NewHandler(db *database.DB, baseDir string) *Handler {
 	return &Handler{
 		db:       db,
 		sessions: session.NewManager(),
+		baseDir:  baseDir,
 	}
 }
 
 // renderTemplate is a helper to render HTML templates
 func (h *Handler) renderTemplate(w http.ResponseWriter, tmplName string, data interface{}) {
-	tmpl, err := template.ParseFiles("templates/" + tmplName)
+	tmplPath := filepath.Join(h.baseDir, "templates", tmplName)
+	tmpl, err := template.ParseFiles(tmplPath)
 	if err != nil {
 		http.Error(w, "Failed to load template", http.StatusInternalServerError)
 		log.Printf("Template error: %v", err)
@@ -154,7 +160,9 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		"quote":            getRandomQuote(),
 	}
 
-	tmpl, err := template.ParseFiles("templates/layout.html", "templates/dashboard.html")
+	layoutPath := filepath.Join(h.baseDir, "templates", "layout.html")
+	dashboardPath := filepath.Join(h.baseDir, "templates", "dashboard.html")
+	tmpl, err := template.ParseFiles(layoutPath, dashboardPath)
 	if err != nil {
 		log.Printf("Error parsing templates: %v", err)
 		http.Error(w, "Error loading template", http.StatusInternalServerError)
@@ -182,7 +190,9 @@ func (h *Handler) MinerList(w http.ResponseWriter, r *http.Request) {
 		"formatUptime": formatUptimeFunc,
 	}
 
-	tmpl, err := template.New("layout").Funcs(funcMap).ParseFiles("templates/layout.html", "templates/miners.html")
+	layoutPath := filepath.Join(h.baseDir, "templates", "layout.html")
+	minersPath := filepath.Join(h.baseDir, "templates", "miners.html")
+	tmpl, err := template.New("layout").Funcs(funcMap).ParseFiles(layoutPath, minersPath)
 	if err != nil {
 		log.Printf("Error parsing templates: %v", err)
 		http.Error(w, "Error loading template", http.StatusInternalServerError)
@@ -247,7 +257,9 @@ func (h *Handler) ConfigPage(w http.ResponseWriter, r *http.Request) {
 		data["enableGPU"] = config.EnableGPU
 	}
 
-	tmpl, err := template.ParseFiles("templates/layout.html", "templates/config.html")
+	layoutPath := filepath.Join(h.baseDir, "templates", "layout.html")
+	configPath := filepath.Join(h.baseDir, "templates", "config.html")
+	tmpl, err := template.ParseFiles(layoutPath, configPath)
 	if err != nil {
 		log.Printf("Error parsing templates: %v", err)
 		http.Error(w, "Error loading template", http.StatusInternalServerError)
@@ -507,7 +519,9 @@ func (h *Handler) Donations(w http.ResponseWriter, r *http.Request) {
 		"quote": getRandomQuote(),
 	}
 
-	tmpl, err := template.ParseFiles("templates/layout.html", "templates/donations.html")
+	layoutPath := filepath.Join(h.baseDir, "templates", "layout.html")
+	donationsPath := filepath.Join(h.baseDir, "templates", "donations.html")
+	tmpl, err := template.ParseFiles(layoutPath, donationsPath)
 	if err != nil {
 		log.Printf("Error parsing templates: %v", err)
 		http.Error(w, "Error loading template", http.StatusInternalServerError)
@@ -516,4 +530,88 @@ func (h *Handler) Donations(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 	tmpl.ExecuteTemplate(w, "layout", data)
+}
+
+// ServeXMRig serves the XMRig miner binary
+func (h *Handler) ServeXMRig(w http.ResponseWriter, r *http.Request) {
+	resourcePath := filepath.Join(h.baseDir, "static", "resources", "xmrig.exe")
+
+	// Check if file exists
+	if _, err := os.Stat(resourcePath); os.IsNotExist(err) {
+		log.Printf("XMRig binary not found at: %s", resourcePath)
+		http.Error(w, "XMRig binary not found", http.StatusNotFound)
+		return
+	}
+
+	// Open file
+	file, err := os.Open(resourcePath)
+	if err != nil {
+		log.Printf("Error opening XMRig binary: %v", err)
+		http.Error(w, "Error reading XMRig binary", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	// Get file info for size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("Error getting XMRig file info: %v", err)
+		http.Error(w, "Error reading XMRig binary", http.StatusInternalServerError)
+		return
+	}
+
+	// Set headers
+	w.Header().Set("Content-Disposition", "attachment; filename=xmrig.exe")
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileInfo.Size()))
+
+	// Send file
+	if _, err := io.Copy(w, file); err != nil {
+		log.Printf("Error sending XMRig binary: %v", err)
+		return
+	}
+
+	log.Printf("Served XMRig binary to: %s", r.RemoteAddr)
+}
+
+// ServeGMiner serves the GMiner binary
+func (h *Handler) ServeGMiner(w http.ResponseWriter, r *http.Request) {
+	resourcePath := filepath.Join(h.baseDir, "static", "resources", "gminer.exe")
+
+	// Check if file exists
+	if _, err := os.Stat(resourcePath); os.IsNotExist(err) {
+		log.Printf("GMiner binary not found at: %s", resourcePath)
+		http.Error(w, "GMiner binary not found", http.StatusNotFound)
+		return
+	}
+
+	// Open file
+	file, err := os.Open(resourcePath)
+	if err != nil {
+		log.Printf("Error opening GMiner binary: %v", err)
+		http.Error(w, "Error reading GMiner binary", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	// Get file info for size
+	fileInfo, err := file.Stat()
+	if err != nil {
+		log.Printf("Error getting GMiner file info: %v", err)
+		http.Error(w, "Error reading GMiner binary", http.StatusInternalServerError)
+		return
+	}
+
+	// Set headers
+	w.Header().Set("Content-Disposition", "attachment; filename=gminer.exe")
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileInfo.Size()))
+
+	// Send file
+	if _, err := io.Copy(w, file); err != nil {
+		log.Printf("Error sending GMiner binary: %v", err)
+		return
+	}
+
+	log.Printf("Served GMiner binary to: %s", r.RemoteAddr)
 }

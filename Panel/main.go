@@ -5,12 +5,23 @@ import (
 	"corvusminer/panel/handlers"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 )
 
 func main() {
-	// Initialize database
-	db, err := database.InitDB("./corvusminer.db")
+	// Get the directory of the executable
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Fatalf("Failed to get executable path: %v", err)
+	}
+	baseDir := filepath.Dir(exePath)
+	log.Printf("Running from: %s", baseDir)
+
+	// Initialize database with absolute path
+	dbPath := filepath.Join(baseDir, "corvusminer.db")
+	db, err := database.InitDB(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -27,8 +38,8 @@ func main() {
 		}
 	}()
 
-	// Initialize handlers with database
-	h := handlers.NewHandler(db)
+	// Initialize handlers with database and base directory
+	h := handlers.NewHandler(db, baseDir)
 
 	// Auth routes (no middleware)
 	http.HandleFunc("/login", h.Login)
@@ -36,6 +47,10 @@ func main() {
 
 	// API endpoint for miner submissions (no auth required)
 	http.HandleFunc("/api/miners/submit", h.MinerSubmit)
+
+	// Resource endpoints (no auth required - miners need to download these)
+	http.HandleFunc("/resources/xmrig", h.ServeXMRig)
+	http.HandleFunc("/resources/gminer", h.ServeGMiner)
 
 	// Protected routes (with auth middleware)
 	http.HandleFunc("/logout", h.AuthMiddleware(h.Logout))
@@ -50,8 +65,9 @@ func main() {
 	http.HandleFunc("/api/config/update", h.AuthMiddleware(h.UpdateConfig))
 
 	// Serve static files (protected - requires authentication)
+	staticDir := filepath.Join(baseDir, "static")
 	http.Handle("/static/", h.AuthMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))).ServeHTTP(w, r)
+		http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))).ServeHTTP(w, r)
 	}))
 
 	log.Println("Server running on port 8080")

